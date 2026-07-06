@@ -1,0 +1,36 @@
+{
+  "summary": "First-pass smoke testing (Phase 1) covering backend auth + core endpoints and frontend flows (register, login, tasks, motivation toast, diary CRUD, timer, bottom nav, logout, protected routes, wrong-password error). All primary flows pass. Minor UI issue: Emergent badge overlaps bottom nav on mobile viewport, intercepting clicks on the rightmost tab (tab-diario) — worked around with force click / URL navigation during test.",
+  "tested_scope": ["frontend", "backend", "auth", "integration"],
+  "passed": [
+    "Backend root reachable (200) and CORS/cookies work with credentials",
+    "POST /api/auth/login (admin) sets httpOnly access_token cookie; GET /api/auth/me returns user (200)",
+    "POST /api/motivation returns Portuguese message (Gemini or fallback) — verified: 'Mais uma vitória do seu dia.' and 'Sinto muito orgulho do seu primeiro passo.'",
+    "POST /api/tasks + GET /api/tasks work (200)",
+    "Protected route /rotina redirects to /login when unauthenticated",
+    "Register new user (teste1783359117@rotina.app) → redirected to /rotina",
+    "Login with correct credentials → /rotina; wrong password shows PT-BR error 'E-mail ou senha incorretos'",
+    "Rotina: add task via task-title-input + add-task-btn; item appears with data-testid task-item-{id}",
+    "Rotina: toggle-task shows motivation-toast with PT-BR text",
+    "Rotina: delete-task removes item from list",
+    "Bottom nav tab-rotina and tab-mundo navigate correctly",
+    "MundoHoje placeholder renders ('Em breve.' + FASE 2 label) without errors",
+    "Diario: gratitude/book/page/meditation inputs, timer play (00:01)/pause/reset (00:00)",
+    "Diario: save-day-btn saves entry, appears in diary-history, form clears afterwards",
+    "Diario: delete-diary removes entry",
+    "Logout redirects to /login"
+  ],
+  "failed": [
+    {
+      "area": "frontend/ui",
+      "issue": "Emergent 'Made with Emergent' badge (fixed bottom-right) overlaps the bottom navigation on mobile viewports (420x900), intercepting pointer events on tab-diario. Real user tapping the Diário tab in that zone may not register clicks reliably.",
+      "evidence": "Playwright click on [data-testid=\"tab-diario\"] failed with '<a id=\"emergent-badge\"> intercepts pointer events' until force=True was used. Screenshot shows badge overlapping the rightmost nav item.",
+      "priority": "MEDIUM"
+    }
+  ],
+  "action_items": [
+    "Increase bottom padding on BottomNav or add bottom margin/safe-area so the Emergent badge does not overlap the Diário tab on mobile. Alternatively raise nav z-index above the badge or shift the badge above the nav bar."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}

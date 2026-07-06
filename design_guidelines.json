@@ -1,0 +1,103 @@
+{
+  "theme": "Dark Mode Default",
+  "archetype": "Archetype 3 (Pastel & Soft) inverted for Dark Mode",
+  "description": "A mobile-first wellness and routine app with a calming dark mode. Uses 'Neo-Brutalist' clean layouts but softened with curved geometries, pastel typography accents, and deep plum-tinted charcoal backgrounds to reduce cognitive load and evoke tranquility.",
+  "colors": {
+    "background": "#14121A",
+    "surface": "#1F1D29",
+    "surface_glass": "rgba(31, 29, 41, 0.85)",
+    "primary_pastel_purple": "#C4B5FD",
+    "secondary_mint_green": "#A7F3D0",
+    "accent_glow": "rgba(196, 181, 253, 0.15)",
+    "text_primary": "#F8F7FA",
+    "text_secondary": "#9CA3AF",
+    "border_subtle": "rgba(255, 255, 255, 0.08)",
+    "danger_pastel": "#FDA4AF",
+    "success_pastel": "#6EE7B7"
+  },
+  "typography": {
+    "headings_font": "'Outfit', sans-serif",
+    "body_font": "'Figtree', sans-serif",
+    "rules": [
+      "No Inter or Roboto allowed.",
+      "Headlines must use tracking-tight for a modern, compact look.",
+      "H1 size capped at text-4xl on mobile, text-5xl on desktop.",
+      "Use font-medium or font-semibold for headings, avoid font-black to maintain the calming vibe.",
+      "Subtle uppercase overlines (text-xs tracking-[0.2em]) for categories like News and Diary tags."
+    ]
+  },
+  "spacing_and_layout": {
+    "philosophy": "Generous Spacing, Mobile-first PWA",
+    "container": "w-full max-w-md mx-auto min-h-screen bg-[#14121A] pb-24 relative overflow-x-hidden text-[#F8F7FA]",
+    "padding": "p-6",
+    "card_radius": "rounded-3xl",
+    "button_radius": "rounded-full"
+  },
+  "components_guidelines": {
+    "bottom_tab_bar": {
+      "style": "Fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 pb-safe pt-4 px-6 flex justify-around items-center",
+      "background": "Crystal Glassmorphism: backdrop-blur-2xl bg-[#1F1D29]/85 border-t border-white/5",
+      "interaction": "Active tab uses pastel purple color and a subtle dot or line indicator. Inactive tabs use text_secondary. Icons from lucide-react.",
+      "testid": "bottom-nav"
+    },
+    "cards": {
+      "style": "bg-[#1F1D29] rounded-3xl p-5 border border-[#ffffff14] shadow-[0_8px_32px_rgba(0,0,0,0.2)]",
+      "interaction": "active:scale-[0.98] transition-transform duration-200"
+    },
+    "buttons": {
+      "primary": "bg-[#C4B5FD] text-[#14121A] font-semibold rounded-full py-4 px-6 hover:bg-[#A7F3D0] transition-colors w-full flex justify-center items-center",
+      "secondary": "bg-transparent border border-[#C4B5FD] text-[#C4B5FD] rounded-full py-4 px-6 w-full flex justify-center items-center",
+      "icon_button": "p-3 rounded-full bg-white/5 hover:bg-white/10 text-white flex justify-center items-center"
+    },
+    "todo_list": {
+      "item": "flex items-center justify-between p-4 bg-[#1F1D29] rounded-2xl mb-3 border border-[#ffffff14]",
+      "checkbox": "w-6 h-6 rounded-full border-2 border-[#C4B5FD] flex items-center justify-center cursor-pointer transition-all shrink-0",
+      "checkbox_checked": "bg-[#A7F3D0] border-[#A7F3D0]",
+      "delete_action": "text-[#FDA4AF] opacity-80 hover:opacity-100 p-2 shrink-0 cursor-pointer"
+    },
+    "toast_motivation": {
+      "style": "fixed top-4 left-1/2 -translate-x-1/2 bg-[#A7F3D0] text-[#14121A] px-6 py-3 rounded-full shadow-lg font-medium text-sm flex items-center gap-2 z-50 whitespace-nowrap",
+      "animation": "slide-in-from-top, fade-in"
+    },
+    "forms_and_inputs": {
+      "style": "w-full bg-[#14121A] border border-white/10 rounded-2xl p-4 text-[#F8F7FA] placeholder:text-[#9CA3AF] focus:border-[#C4B5FD] focus:ring-1 focus:ring-[#C4B5FD] transition-all outline-none"
+    }
+  },
+  "pages_structure": {
+    "auth": "Clean layout. Logo centered. Welcome back message in pastel purple. Minimal inputs. Large rounded-full 'Entrar' button.",
+    "minha_rotina": "Header 'Minha Rotina' with current date. Clean To-Do list below. FAB or inline input for new tasks.",
+    "mundo_hoje": "Categorized feed. Horizontal scroll/tabs for categories (Política, Economia, Boas Notícias). Vertical stack of news cards. Cards have an AI summary icon.",
+    "diario_foco": "Three sections: Gratitude input area, Reading progress (Book title + page input), Meditation block (Timer with large glowing circle in mint/purple). Bottom 'Salvar Dia' button."
+  },
+  "micro_animations": {
+    "buttons": "active:scale-95 transition-all duration-200 ease-out",
+    "page_transitions": "Fade in and slight slide up on mount.",
+    "checkbox": "Scale bump on check, text line-through with opacity reduction."
+  },
+  "icons": "lucide-react (Use regular weight, avoid filled icons unless active in tab bar)",
+  "testing": {
+    "rule": "ALL interactive elements must use data-testid attributes.",
+    "examples": [
+      "data-testid='todo-checkbox'",
+      "data-testid='delete-task-btn'",
+      "data-testid='save-day-btn'",
+      "data-testid='tab-rotina'"
+    ]
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1710162734162-6a673ce4399a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMHNtb290aCUyMHBhc3RlbCUyMHB1cnBsZSUyMG1pbnQlMjBncmVlbiUyMGdyYWRpZW50JTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODMzNTg2ODh8MA&ixlib=rb-4.1.0&q=85",
+        "category": "background_glow",
+        "description": "Used as an extremely low opacity (5-10%) blur behind the app's top header to give a subtle pastel ambiance without looking like 'AI slop'. Use with absolute positioning and backdrop-blur-3xl or CSS blur."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Ensure mobile-first approach by wrapping the main routing element in a max-w-md mx-auto container.",
+    "Use standard HTML+Tailwind for main structure. Custom Shadcn components are fine if stripped of generic styles to match these pastel-dark rules.",
+    "Do NOT use pure white/black. Use the specified custom hex codes.",
+    "Apply data-testid to all buttons, inputs, and tabs.",
+    "Implement the toast notification logic securely."
+  ]
+}
