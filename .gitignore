@@ -1,0 +1,20 @@
+# Python
+backend/.env
+backend/__pycache__/
+*.pyc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Android
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
+
+# VS Code
+.vscode/
+
+# Sistema
+.DS_Store
+Thumbs.db

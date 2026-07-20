@@ -1,0 +1,9 @@
+{
+  "appId": "com.henriquecortez.lumora",
+  "appName": "Lumora",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}

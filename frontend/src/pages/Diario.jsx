@@ -34,9 +34,20 @@ export default function Diario() {
   const [statsRefreshKey, setStatsRefreshKey] = useState(0);
 
   const load = async () => {
+  try {
     const { data } = await api.get("/diary");
-    setHistory(data);
-  };
+
+    if (Array.isArray(data)) {
+      setHistory(data);
+    } else {
+      setHistory([]);
+    }
+
+  } catch (error) {
+    console.log("Erro ao carregar diário:", error);
+    setHistory([]);
+  }
+};
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
@@ -98,10 +109,12 @@ export default function Diario() {
   const meditationDoneSeconds = preset > 0 ? (preset - seconds) : seconds;
 
   const saveDay = async () => {
-    if (!gratitude && !bookTitle && !meditation && meditationDoneSeconds === 0) {
-      setSaveMsg("Escreva algo antes de salvar.");
-      return;
-    }
+  console.log("Clicou em salvar");
+
+  if (!gratitude && !bookTitle && !meditation && meditationDoneSeconds === 0) {
+    setSaveMsg("Escreva algo antes de salvar.");
+    return;
+  }
     setSaving(true);
     try {
       const { data } = await api.post("/diary", {

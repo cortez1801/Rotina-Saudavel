@@ -1,11 +1,21 @@
 import axios from "axios";
 
-const BACKEND_URL = "";
+const BACKEND_URL = "http://192.168.0.176:8000";
 export const API = `${BACKEND_URL}/api`;
 
 const api = axios.create({
   baseURL: API,
   withCredentials: true,
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
 });
 
 export function formatApiErrorDetail(detail) {

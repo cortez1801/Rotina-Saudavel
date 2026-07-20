@@ -75,40 +75,61 @@ def create_access_token(user_id: str, email: str) -> str:
 
 
 async def get_current_user(request: Request) -> dict:
+    print("COOKIES RECEBIDOS:", request.cookies)
+
     token = request.cookies.get("access_token")
+
     if not token:
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             token = auth[7:]
+
     if not token:
         raise HTTPException(status_code=401, detail="Não autenticado")
+
     try:
-        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(
+            token,
+            get_jwt_secret(),
+            algorithms=[JWT_ALGORITHM]
+        )
+
         if payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Tipo de token inválido")
-        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+
+        user = await db.users.find_one(
+            {"_id": ObjectId(payload["sub"])}
+        )
+
         if not user:
             raise HTTPException(status_code=401, detail="Usuário não encontrado")
+
         user["id"] = str(user["_id"])
         user.pop("_id", None)
         user.pop("password_hash", None)
+
         return user
+
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Sessão expirada")
+
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido")
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
+    print("CRIANDO COOKIE:", token[:30])
+
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=False,
+        samesite="lax",
         max_age=7 * 24 * 60 * 60,
         path="/",
     )
+    
 
 
 # ============ Models ============
@@ -127,10 +148,14 @@ class UserOut(BaseModel):
     id: str
     email: str
     name: str
+    token: str | None = None
 
 
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
+    type: str = "daily"
+    due_date: str = ""
+    repeat_days: list[str] = []
 
 
 class TaskOut(BaseModel):
@@ -138,6 +163,9 @@ class TaskOut(BaseModel):
     title: str
     completed: bool
     created_at: str
+    type: str = "daily"
+    due_date: str = ""
+    last_completed_date: str = ""
 
 
 class DiaryCreate(BaseModel):
@@ -181,13 +209,55 @@ async def register(data: RegisterInput, response: Response):
 @api_router.post("/auth/login", response_model=UserOut)
 async def login(data: LoginInput, response: Response):
     email = data.email.lower().strip()
+
+    print("EMAIL RECEBIDO:", email)
+
     user = await db.users.find_one({"email": email})
+
+    print("USUARIO ENCONTRADO:", user)
+
     if not user or not verify_password(data.password, user["password_hash"]):
+        print("FALHOU LOGIN")
         raise HTTPException(status_code=401, detail="E-mail ou senha incorretos")
     user_id = str(user["_id"])
     token = create_access_token(user_id, email)
     set_auth_cookie(response, token)
-    return UserOut(id=user_id, email=email, name=user.get("name", ""))
+
+    return UserOut(
+    id=user_id,
+    email=email,
+    name=user.get("name", ""),
+    token=token
+)
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: dict):
+    email = data.get("email", "").lower().strip()
+    new_password = data.get("new_password", "")
+
+    if not email or not new_password:
+        raise HTTPException(status_code=400, detail="Preencha todos os campos.")
+
+    user = await db.users.find_one({"email": email})
+
+    if not user:
+        raise HTTPException(status_code=404, detail="E-mail não encontrado.")
+
+    if verify_password(new_password, user["password_hash"]):
+        raise HTTPException(
+            status_code=400,
+            detail="A nova senha deve ser diferente da senha atual."
+        )
+
+    password_hash = hash_password(new_password)
+
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"password_hash": password_hash}},
+    )
+
+    return {"message": "Senha alterada com sucesso!"}
 
 
 @api_router.post("/auth/logout")
@@ -208,13 +278,64 @@ def _task_from_doc(doc: dict) -> TaskOut:
         title=doc["title"],
         completed=doc.get("completed", False),
         created_at=doc.get("created_at", ""),
+        type=doc.get("type", "daily"),
+        due_date=doc.get("due_date", ""),
     )
-
+    
 
 @api_router.get("/tasks", response_model=List[TaskOut])
 async def list_tasks(user: dict = Depends(get_current_user)):
-    docs = await db.tasks.find({"user_id": user["id"]}).sort("created_at", -1).to_list(500)
-    return [_task_from_doc(d) for d in docs]
+    docs = await db.tasks.find(
+        {"user_id": user["id"]}
+    ).sort("created_at", -1).to_list(500)
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    today_weekday = datetime.now(timezone.utc).weekday()
+
+    weekday_map = {
+        "mon": 0,
+        "tue": 1,
+        "wed": 2,
+        "thu": 3,
+        "fri": 4,
+        "sat": 5,
+        "sun": 6,
+    }
+
+    filtered_docs = []
+
+    for doc in docs:
+        task_type = doc.get("type", "daily")
+
+        if task_type == "daily":
+            doc["completed"] = (
+                doc.get("last_completed_date", "") == today
+            )
+            filtered_docs.append(doc)
+
+        elif task_type == "recurring":
+            repeat_days = doc.get("repeat_days", [])
+
+            print(
+                "RECORRENTE:",
+                doc["title"],
+                repeat_days,
+                today_weekday,
+            )
+
+            if today_weekday in [
+                weekday_map.get(day)
+                for day in repeat_days
+            ]:
+                doc["completed"] = (
+                    doc.get("last_completed_date", "") == today
+                )
+                filtered_docs.append(doc)
+
+        elif task_type == "scheduled":
+            filtered_docs.append(doc)
+
+    return [_task_from_doc(d) for d in filtered_docs]
 
 
 @api_router.post("/tasks", response_model=TaskOut)
@@ -224,7 +345,14 @@ async def create_task(data: TaskCreate, user: dict = Depends(get_current_user)):
         "title": data.title.strip(),
         "completed": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "type": data.type,
+        "due_date": data.due_date,
+        "repeat_days": data.repeat_days if data.type == "recurring" else [],
+        "last_completed_date": "",
     }
+
+    print("DOCUMENTO SALVO:", doc)
+
     result = await db.tasks.insert_one(doc)
     doc["_id"] = result.inserted_id
     return _task_from_doc(doc)
@@ -240,11 +368,25 @@ async def update_task(task_id: str, data: TaskUpdate, user: dict = Depends(get_c
         oid = ObjectId(task_id)
     except Exception:
         raise HTTPException(status_code=400, detail="ID inválido")
+
     doc = await db.tasks.find_one({"_id": oid, "user_id": user["id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
-    await db.tasks.update_one({"_id": oid}, {"$set": {"completed": data.completed}})
-    doc["completed"] = data.completed
+
+    update = {
+        "completed": data.completed,
+    }
+
+    if doc.get("type", "daily") == "daily":
+     if data.completed:
+        update["last_completed_date"] = datetime.now(timezone.utc).date().isoformat()
+    else:
+        update["last_completed_date"] = ""
+
+    await db.tasks.update_one({"_id": oid}, {"$set": update})
+
+    doc.update(update)
+
     return _task_from_doc(doc)
 
 
@@ -266,32 +408,27 @@ class MotivationInput(BaseModel):
 
 
 @api_router.post("/motivation")
-async def motivational_message(data: MotivationInput, user: dict = Depends(get_current_user)):
-    """Returns a short motivational message in Portuguese, generated by Gemini 3 Flash."""
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        api_key = os.environ.get("EMERGENT_LLM_KEY")
-        if not api_key:
-            raise RuntimeError("Missing EMERGENT_LLM_KEY")
-        session_id = f"motiv-{user['id']}-{uuid.uuid4().hex[:8]}"
-        system = (
-            "Você é um coach motivacional brasileiro carinhoso e breve. "
-            "Sempre responda em português do Brasil, com uma frase curta (máximo 8 palavras), "
-            "positiva, celebrando a conclusão de uma tarefa. Sem emojis. Sem aspas. "
-            "Varie as frases e evite repetição."
-        )
-        chat = LlmChat(api_key=api_key, session_id=session_id, system_message=system) \
-            .with_model("gemini", "gemini-3-flash-preview")
-        task_hint = data.task_title.strip() or "uma tarefa"
-        prompt = f"O usuário acabou de concluir: '{task_hint}'. Escreva uma frase curta de comemoração."
-        msg = await chat.send_message(UserMessage(text=prompt))
-        text = str(msg).strip().strip('"').strip("'")
-        if not text or len(text) > 120:
-            text = random.choice(FALLBACK_MOTIVATIONS)
-        return {"message": text}
-    except Exception as e:
-        logger.warning(f"Motivation AI fallback: {e}")
-        return {"message": random.choice(FALLBACK_MOTIVATIONS)}
+async def motivational_message(
+    data: MotivationInput,
+    user: dict = Depends(get_current_user),
+):
+    """Retorna uma mensagem motivacional aleatória."""
+    task_hint = data.task_title.strip()
+
+    if task_hint:
+        return {
+            "message": random.choice([
+                f"Parabéns por concluir: {task_hint}!",
+                f"Mais uma missão cumprida: {task_hint}!",
+                f"Excelente! Você concluiu {task_hint}.",
+                f"Continue assim! {task_hint} finalizado.",
+                f"Você está evoluindo a cada tarefa!"
+            ])
+        }
+
+    return {
+        "message": random.choice(FALLBACK_MOTIVATIONS)
+    }
 
 
 # ============ Diary endpoints ============
@@ -568,17 +705,42 @@ async def diary_stats(user: dict = Depends(get_current_user)):
 
     for doc in docs:
         ca = doc.get("created_at", "")
+        key = None
         if isinstance(ca, str) and len(ca) >= 10:
             key = ca[:10]
-            if key in per_day:
-                per_day[key]["entries"] += 1
-                per_day[key]["meditation_minutes"] += round(
-                    doc.get("meditation_seconds", 0) / 60, 1
-                )
-                if doc.get("gratitude", "").strip():
-                    per_day[key]["gratitude_count"] += 1
-                if doc.get("book_title", "").strip():
-                    per_day[key]["reading_count"] += 1
+
+        if key in per_day:
+            per_day[key]["entries"] += 1
+
+            per_day[key]["meditation_minutes"] += round(
+                doc.get("meditation_seconds", 0) / 60, 1
+            )
+
+            if doc.get("gratitude", "").strip():
+                per_day[key]["gratitude_count"] += 1
+
+            if doc.get("book_title", "").strip() and doc.get("book_page", "").strip():
+                try:
+                    current_page = int(doc.get("book_page"))
+
+                    previous = await db.diary.find_one(
+                        {
+                            "user_id": user["id"],
+                            "book_title": doc.get("book_title"),
+                            "created_at": {"$lt": ca},
+                        },
+                        sort=[("created_at", -1)],
+                    )
+
+                    if previous and previous.get("book_page"):
+                        previous_page = int(previous.get("book_page"))
+                        pages_read = max(0, current_page - previous_page)
+                    else:
+                        pages_read = 0
+
+                    per_day[key]["reading_count"] += pages_read
+                except (ValueError, TypeError):
+                    pass
 
     days = [per_day[k] for k in sorted(per_day.keys())]
     totals = {
@@ -624,10 +786,11 @@ async def on_startup():
 # ============ CORS + Router ============
 app.include_router(api_router)
 
-frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+print("ROTAS CARREGADAS:", [getattr(r, "path", str(r)) for r in app.routes])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

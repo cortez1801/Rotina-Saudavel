@@ -1,8 +1,23 @@
 import { useEffect, useState } from "react";
-import { Check, Plus, Trash2, LogOut, Loader2, Flame } from "lucide-react";
+import {
+  Check,
+  Plus,
+  Trash2,
+  LogOut,
+  Loader2,
+  Flame,
+  CalendarDays,
+  Repeat,
+  Sparkles,
+} from "lucide-react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import MotivationToast from "../components/MotivationToast";
+import {
+  solicitarPermissao,
+  agendarNotificacoes,
+  cancelarNotificacoes,
+} from "../services/notifications";
 
 function todayLabel() {
   const d = new Date();
@@ -12,9 +27,63 @@ function todayLabel() {
 }
 
 export default function Rotina() {
+  
+
+  function daysUntil(date) {
+  const today = new Date();
+  const due = new Date(date);
+
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+
+  const diff = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+
+  const formattedDate = due.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+  });
+
+  if (diff < 0)
+    return {
+      text: `${formattedDate} • Atrasada`,
+      color: "text-red-500",
+    };
+
+  if (diff === 0)
+    return {
+      text: `${formattedDate} • Vence hoje`,
+      color: "text-red-400",
+    };
+
+  if (diff === 1)
+    return {
+      text: `${formattedDate} • Falta 1 dia`,
+      color: "text-orange-400",
+    };
+
+  if (diff <= 7)
+    return {
+      text: `${formattedDate} • Faltam ${diff} dias`,
+      color: "text-yellow-400",
+    };
+
+  return {
+    text: `${formattedDate} • Faltam ${diff} dias`,
+    color: "text-green-400",
+  };
+}
+
+  useEffect(() => {
+  solicitarPermissao();
+}, []);
+
   const { user, logout } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [taskType, setTaskType] = useState("daily");
+  const [repeatDays, setRepeatDays] = useState([]);
+  const [dueDate, setDueDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [motivation, setMotivation] = useState("");
@@ -27,14 +96,17 @@ export default function Rotina() {
         api.get("/tasks"),
         api.get("/streak").catch(() => ({ data: { current: 0, longest: 0 } })),
       ]);
-      setTasks(tasksRes.data);
+      
+setTasks(tasksRes.data);
       setStreak(streakRes.data);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+useEffect(() => {
+  load();
+}, []);
 
   useEffect(() => {
     if (!motivation) return;
@@ -43,14 +115,39 @@ export default function Rotina() {
   }, [motivation]);
 
   const addTask = async (e) => {
-    e.preventDefault();
-    const t = title.trim();
-    if (!t) return;
-    setCreating(true);
-    try {
-      const { data } = await api.post("/tasks", { title: t });
-      setTasks((prev) => [data, ...prev]);
-      setTitle("");
+  e?.preventDefault?.();
+
+  const t = title.trim();
+  if (!t) return;
+
+  setCreating(true);
+
+  try {
+    const { data } = await api.post("/tasks", {
+      title: t,
+      type: taskType,
+      due_date: dueDate,
+      repeat_days: taskType === "recurring" ? repeatDays : [],
+    });
+
+    if (
+      taskType === "recurring" &&
+      !repeatDays.includes(
+        ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date().getDay()]
+      )
+    ) {
+      alert("✅ Tarefa criada! Ela aparecerá no próximo dia programado.");
+    }
+
+    console.log("AGENDANDO NOTIFICAÇÃO", data);
+await agendarNotificacoes(data);
+
+setTasks((prev) => [data, ...prev]);
+setTitle("");
+setTaskType("daily");
+setRepeatDays([]);
+setDueDate("");
+setShowModal(false);
     } finally {
       setCreating(false);
     }
@@ -78,17 +175,38 @@ export default function Rotina() {
   };
 
   const deleteTask = async (id) => {
-    const prev = tasks;
-    setTasks((p) => p.filter((t) => t.id !== id));
-    try {
-      await api.delete(`/tasks/${id}`);
-    } catch (_) {
-      setTasks(prev);
+  const prev = tasks;
+  const task = tasks.find((t) => t.id === id);
+
+  setTasks((p) => p.filter((t) => t.id !== id));
+
+  try {
+    if (task) {
+      await cancelarNotificacoes(task.id);
     }
-  };
+
+    await api.delete(`/tasks/${id}`);
+  } catch (_) {
+    setTasks(prev);
+  }
+};
 
   const pending = tasks.filter((t) => !t.completed).length;
 
+const dailyTasks = tasks.filter(
+  (t) => t.type === "daily"
+);
+
+const recurringTasks = tasks.filter(
+  (t) => t.type === "recurring"
+);
+
+const scheduledTasks = tasks
+  .filter((t) => t.type === "scheduled")
+  .sort(
+    (a, b) => new Date(a.due_date) - new Date(b.due_date)
+  );
+  
   return (
     <div className="px-6 pt-12 pb-4">
       <MotivationToast message={motivation} />
@@ -105,7 +223,10 @@ export default function Rotina() {
         </div>
         <button
           data-testid="logout-btn"
-          onClick={logout}
+          onClick={() => {
+  console.log("CLIQUEI NO LOGOUT");
+  logout();
+}}
           className="p-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
           aria-label="Sair"
         >
@@ -141,74 +262,373 @@ export default function Rotina() {
         </div>
       </div>
 
-      <form onSubmit={addTask} className="mb-6 fade-up">
-        <div className="flex items-center gap-2 bg-[var(--bg-card)] border border-white/10 rounded-2xl p-2 pl-4 focus-within:border-[var(--c1)] transition-all">
-          <input
-            data-testid="task-title-input"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Nova tarefa..."
-            className="flex-1 bg-transparent outline-none text-white placeholder:text-[#9CA3AF] text-sm"
-          />
+      <div className="mb-7 fade-up">
+  <button
+    onClick={() => setShowModal(true)}
+    className="group w-full rounded-3xl border border-[var(--c2)]/20 bg-[var(--bg-card)] transition-all duration-300 hover:border-[var(--c2)]/60 hover:bg-[var(--c2)]/5 hover:shadow-[0_0_25px_rgba(168,85,247,0.18)] active:scale-[0.98]"
+  >
+    <div className="flex items-center justify-center gap-3 rounded-3xl bg-[var(--bg-card)] py-4 transition-all group-hover:bg-transparent">
+      <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center">
+        <Plus size={20} className="text-[var(--c2)]" />
+      </div>
+
+      <div className="text-left">
+        <p className="font-semibold text-white">
+          Nova tarefa
+        </p>
+        <p className="text-xs text-white/70">
+          Diária ou agendada
+        </p>
+      </div>
+    </div>
+  </button>
+</div>
+
+      <section data-testid="tasks-list" className="space-y-6">
+
+  {/* TAREFAS DIÁRIAS */}
+<div>
+  <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-2">
+    <span className="text-white font-semibold tracking-wide">
+      Diárias
+    </span>
+
+    <span className="text-xs text-white/45">
+      {dailyTasks.length}
+    </span>
+  </div>
+
+    {dailyTasks.length === 0 ? (
+      <p className="text-sm text-[#9CA3AF]">
+        Nenhuma tarefa diária.
+      </p>
+    ) : (
+      dailyTasks.map((task, i) => (
+        <div
+          key={task.id}
+          className="fade-up flex items-center gap-3 p-4 mb-3 bg-[var(--bg-card)] rounded-2xl border border-white/[0.06]"
+          style={{ animationDelay: `${i * 30}ms` }}
+        >
           <button
-            data-testid="add-task-btn"
-            type="submit"
-            disabled={creating || !title.trim()}
-            className="w-10 h-10 shrink-0 rounded-full bg-[var(--c1)] text-[var(--bg-app)] flex items-center justify-center active:scale-90 transition-transform disabled:opacity-40"
-            aria-label="Adicionar tarefa"
+            onClick={() => toggleTask(task)}
+            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+              task.completed
+                ? "bg-[var(--c2)] border-[var(--c2)]"
+                : "border-[var(--c1)]"
+            }`}
           >
-            {creating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={18} strokeWidth={2.5} />}
+            {task.completed && <Check size={14} />}
+          </button>
+
+          <span
+            className={`flex-1 ${
+              task.completed
+                ? "line-through text-[#9CA3AF]"
+                : "text-white"
+            }`}
+          >
+            {task.title}
+          </span>
+
+          <button onClick={() => deleteTask(task.id)}>
+            <Trash2 size={16} className="text-[var(--c3)]" />
           </button>
         </div>
-      </form>
+      ))
+    )}
+  </div>
 
-      <section data-testid="tasks-list" className="space-y-3">
-        {loading ? (
-          <div className="text-center text-[#9CA3AF] py-8">Carregando...</div>
-        ) : tasks.length === 0 ? (
-          <div className="text-center text-[#9CA3AF] py-16 fade-up">
-            <p className="text-base">Seu dia está em branco.</p>
-            <p className="text-sm mt-1">Que tal começar por uma tarefa pequena?</p>
-          </div>
-        ) : (
-          tasks.map((task, i) => (
-            <div
-              key={task.id}
-              data-testid={`task-item-${task.id}`}
-              className="fade-up flex items-center gap-3 p-4 bg-[var(--bg-card)] rounded-2xl border border-white/[0.06] active:scale-[0.99] transition-transform"
-              style={{ animationDelay: `${i * 30}ms` }}
+{/* TAREFAS RECORRENTES */}
+
+<div>
+
+  <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-2">
+    <span className="text-white font-semibold tracking-wide">
+      Recorrentes
+    </span>
+
+    <span className="text-xs text-white/45">
+      {recurringTasks.length}
+    </span>
+  </div>
+
+  {recurringTasks.length === 0 ? (
+    <p className="text-sm text-[#9CA3AF]">
+  Nenhuma tarefa programada para hoje.
+</p>
+  ) : (
+    recurringTasks.map((task, i) => (
+      <div
+        key={task.id}
+        className="fade-up flex items-center gap-3 p-4 mb-3 bg-[var(--bg-card)] rounded-2xl border border-white/[0.06]"
+        style={{ animationDelay: `${i * 30}ms` }}
+      >
+
+        <button
+          onClick={() => toggleTask(task)}
+          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+            task.completed
+              ? "bg-[var(--c2)] border-[var(--c2)]"
+              : "border-[var(--c1)]"
+          }`}
+        >
+          {task.completed && <Check size={14} />}
+        </button>
+
+        <span
+          className={`flex-1 ${
+            task.completed
+              ? "line-through text-[#9CA3AF]"
+              : "text-white"
+          }`}
+        >
+          {task.title}
+        </span>
+
+        <button onClick={() => deleteTask(task.id)}>
+          <Trash2 size={16} className="text-[var(--c3)]" />
+        </button>
+
+      </div>
+    ))
+  )}
+
+</div>
+
+  {/* TAREFAS AGENDADAS */}
+<div>
+
+  <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-2">
+  <span className="text-white font-semibold tracking-wide">
+    Agendadas
+  </span>
+
+  <span className="text-xs text-white/45">
+    {scheduledTasks.length}
+  </span>
+</div>
+
+    {scheduledTasks.length === 0 ? (
+      <p className="text-sm text-[#9CA3AF]">
+        Nenhuma tarefa agendada.
+      </p>
+    ) : (
+      scheduledTasks.map((task, i) => {
+  const status = daysUntil(task.due_date);
+
+  return (
+    <div
+      key={task.id}
+      className="fade-up flex items-center gap-3 p-4 mb-3 bg-[var(--bg-card)] rounded-2xl border border-white/[0.06]"
+      style={{ animationDelay: `${i * 30}ms` }}
+    >
+          <button
+            onClick={() => toggleTask(task)}
+            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+              task.completed
+                ? "bg-[var(--c2)] border-[var(--c2)]"
+                : "border-[var(--c1)]"
+            }`}
+          >
+            {task.completed && <Check size={14} />}
+          </button>
+
+          <div className="flex-1">
+            <span
+              className={`block ${
+                task.completed
+                  ? "line-through text-[#9CA3AF]"
+                  : "text-white"
+              }`}
             >
+              {task.title}
+            </span>
+
+            <span
+  className={`block text-[11px] mt-1 font-medium ${status.color}`}
+>
+  {status.text}
+</span>
+          </div>
+
+          <button onClick={() => deleteTask(task.id)}>
+            <Trash2 size={16} className="text-[var(--c3)]" />
+          </button>
+                        </div>
+      );
+    })
+    )}
+  </div>
+
+</section>
+{showModal && (
+  <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-6">
+    <div className="w-full max-w-md rounded-3xl bg-[var(--bg-card)] border border-white/10 p-6">
+
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-11 h-11 rounded-2xl bg-[var(--c1)]/15 flex items-center justify-center">
+          <Sparkles className="text-[var(--c1)]" size={22} />
+        </div>
+
+        <div>
+          <h2 className="font-heading text-2xl font-semibold">
+            Nova tarefa
+          </h2>
+
+          <p className="text-sm text-[#9CA3AF]">
+            Organize seu próximo objetivo.
+          </p>
+        </div>
+      </div>
+
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Digite sua tarefa..."
+        className="w-full rounded-2xl bg-black/20 border border-white/10 px-4 py-3 outline-none mb-4"
+      />
+
+      <div className="grid grid-cols-3 gap-3 mb-5">
+
+        <button
+          type="button"
+          onClick={() => setTaskType("daily")}
+          className={`rounded-2xl p-4 border ${
+            taskType === "daily"
+              ? "border-[var(--c1)] bg-[var(--c1)]/15"
+              : "border-white/10 bg-white/5"
+          }`}
+        >
+          <Repeat className="mx-auto mb-2 text-[var(--c1)]" size={24}/>
+          <p className="font-medium">Diária</p>
+          <p className="text-xs text-[#9CA3AF]">
+            Todos os dias
+          </p>
+        </button>
+
+
+        <button
+          type="button"
+          onClick={() => setTaskType("recurring")}
+          className={`rounded-2xl p-4 border ${
+            taskType === "recurring"
+              ? "border-[var(--c1)] bg-[var(--c1)]/15"
+              : "border-white/10 bg-white/5"
+          }`}
+        >
+          <Repeat className="mx-auto mb-2 text-[var(--c1)]" size={24}/>
+          <p className="font-medium">Recorrente</p>
+          <p className="text-xs text-[#9CA3AF]">
+            Dias específicos
+          </p>
+        </button>
+
+
+        <button
+          type="button"
+          onClick={() => setTaskType("scheduled")}
+          className={`rounded-2xl p-4 border ${
+            taskType === "scheduled"
+              ? "border-[var(--c1)] bg-[var(--c1)]/15"
+              : "border-white/10 bg-white/5"
+          }`}
+        >
+          <CalendarDays className="mx-auto mb-2 text-[var(--c1)]" size={24}/>
+          <p className="font-medium">Agendada</p>
+          <p className="text-xs text-[#9CA3AF]">
+            Data específica
+          </p>
+        </button>
+
+      </div>
+
+
+      {taskType === "recurring" && (
+        <div className="mb-5">
+
+          <p className="text-sm mb-3">
+            Repetir em:
+          </p>
+
+          <div className="grid grid-cols-7 gap-2">
+
+            {[
+              ["mon","Seg"],
+              ["tue","Ter"],
+              ["wed","Qua"],
+              ["thu","Qui"],
+              ["fri","Sex"],
+              ["sat","Sáb"],
+              ["sun","Dom"],
+            ].map(([day,label]) => (
+
               <button
-                data-testid={`toggle-task-${task.id}`}
-                onClick={() => toggleTask(task)}
-                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                  task.completed
-                    ? "bg-[var(--c2)] border-[var(--c2)]"
-                    : "border-[var(--c1)] hover:bg-[var(--c1)]/10"
-                } ${poppedId === task.id ? "checkbox-pop" : ""}`}
-                aria-label={task.completed ? "Desmarcar" : "Concluir"}
-              >
-                {task.completed && <Check size={14} strokeWidth={3} className="text-[var(--bg-app)]" />}
-              </button>
-              <span
-                className={`flex-1 text-sm transition-all ${
-                  task.completed ? "line-through text-[#9CA3AF]" : "text-white"
+                key={day}
+                type="button"
+                onClick={() =>
+                  setRepeatDays((prev)=>
+                    prev.includes(day)
+                      ? prev.filter((d)=>d!==day)
+                      : [...prev,day]
+                  )
+                }
+                className={`rounded-xl py-2 text-xs border ${
+                  repeatDays.includes(day)
+                    ? "border-[var(--c1)] bg-[var(--c1)]/15"
+                    : "border-white/10 bg-white/5"
                 }`}
               >
-                {task.title}
-              </span>
-              <button
-                data-testid={`delete-task-${task.id}`}
-                onClick={() => deleteTask(task.id)}
-                className="p-2 rounded-full text-[var(--c3)] opacity-70 hover:opacity-100 hover:bg-[var(--c3)]/10 active:scale-90 transition-all"
-                aria-label="Deletar"
-              >
-                <Trash2 size={16} />
+                {label}
               </button>
-            </div>
-          ))
-        )}
-      </section>
+
+            ))}
+
+          </div>
+
+        </div>
+      )}
+
+
+      {taskType === "scheduled" && (
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e)=>setDueDate(e.target.value)}
+          className="w-full rounded-2xl bg-black/20 border border-white/10 px-4 py-3 mb-5"
+        />
+      )}
+
+
+      <div className="flex gap-3">
+
+        <button
+          type="button"
+          onClick={()=>{
+            setShowModal(false);
+            setTitle("");
+            setTaskType("daily");
+            setRepeatDays([]);
+            setDueDate("");
+          }}
+          className="flex-1 rounded-2xl py-3 bg-white/5"
+        >
+          Cancelar
+        </button>
+
+
+        <button
+          type="button"
+          onClick={(e)=>addTask(e)}
+          className="flex-1 rounded-2xl py-3 bg-[var(--c1)] text-black font-semibold"
+        >
+          Criar
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+)}
     </div>
   );
 }

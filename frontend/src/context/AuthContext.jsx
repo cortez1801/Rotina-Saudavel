@@ -4,6 +4,8 @@ import api, { formatApiErrorDetail } from "../lib/api";
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  
+
   const [user, setUser] = useState(null); // null = checking, false = anon, obj = logged in
   const [checking, setChecking] = useState(true);
 
@@ -23,14 +25,21 @@ export function AuthProvider({ children }) {
   }, [refresh]);
 
   const login = async (email, password) => {
-    try {
-      const { data } = await api.post("/auth/login", { email, password });
-      setUser(data);
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
-    }
-  };
+  try {
+    const { data } = await api.post("/auth/login", { email, password });
+
+console.log("LOGIN RETORNOU:", data);
+console.log("COOKIES:", document.cookie);
+
+    localStorage.setItem("token", data.token);
+    console.log("TOKEN SALVO:", data.token);
+    
+setUser(data);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
+  }
+};
 
   const register = async (name, email, password) => {
     try {
@@ -43,9 +52,16 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    try { await api.post("/auth/logout"); } catch (_) {}
-    setUser(false);
-  };
+  console.log("ENTROU NO LOGOUT");
+  try {
+    const res = await api.post("/auth/logout");
+    console.log("LOGOUT BACKEND:", res.data);
+  } catch (e) {
+    console.log("ERRO LOGOUT:", e);
+  }
+  setUser(false);
+  console.log("USER DEFINIDO COMO FALSE");
+};
 
   return (
     <AuthContext.Provider value={{ user, checking, login, register, logout, refresh }}>

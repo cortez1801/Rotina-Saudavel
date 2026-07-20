@@ -35,7 +35,7 @@ export default function Login() {
         </div>
 
         <h1 className="font-heading text-4xl sm:text-5xl font-semibold tracking-tight mb-2">
-          Bem-vinda<span className="text-[var(--c1)]">.</span>
+          Bem-vindo<span className="text-[var(--c1)]">.</span>
         </h1>
         <p className="text-[#9CA3AF] text-base mb-10">Entre e siga com o seu dia com leveza.</p>
 
@@ -66,10 +66,23 @@ export default function Login() {
           </div>
 
           {err && (
-            <div data-testid="login-error" className="text-sm text-[var(--c3)] bg-[var(--c3)]/10 rounded-xl px-4 py-3 border border-[var(--c3)]/20">
-              {err}
-            </div>
-          )}
+  <>
+    <div
+      data-testid="login-error"
+      className="text-sm text-[var(--c3)] bg-[var(--c3)]/10 rounded-xl px-4 py-3 border border-[var(--c3)]/20"
+    >
+      {err}
+    </div>
+
+    <button
+      type="button"
+      onClick={() => nav("/forgot-password")}
+      className="text-sm text-[var(--c1)] hover:underline mt-2"
+    >
+      Esqueceu sua senha?
+    </button>
+  </>
+)}
 
           <button
             data-testid="login-submit-btn"
